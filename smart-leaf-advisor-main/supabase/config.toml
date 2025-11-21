@@ -1,0 +1,4 @@
+project_id = "pcubrnxssqigcofmfhmw"
+
+[functions.detect-disease]
+verify_jwt = false
