@@ -18,8 +18,8 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"], "allow_headers": ["Content-Type"]}})
 
 # Configuration
-MODEL_PATH = r"d:\leafdetection\smart-leaf-advisor-main\public\leaf_disease_model.h5"
-CLASSES_PATH = r"d:\leafdetection\smart-leaf-advisor-main\public\classes.json"
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "smart-leaf-advisor-main", "public", "leaf_disease_model.h5")
+CLASSES_PATH = os.path.join(os.path.dirname(__file__), "smart-leaf-advisor-main", "public", "classes.json")
 IMG_SIZE = 224
 
 # Global model and classes
