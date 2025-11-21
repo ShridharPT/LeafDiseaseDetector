@@ -27,27 +27,42 @@ model = None
 class_mapping = None
 
 def load_model_and_classes():
-    """Load the trained model and class mapping"""
+    """Load the trained model and class mapping (lazy loading on first use)"""
     global model, class_mapping
     
+    # Try to load classes immediately
     try:
-        if os.path.exists(MODEL_PATH):
-            print(f"Loading model from {MODEL_PATH}...")
-            model = tf.keras.models.load_model(MODEL_PATH)
-            print("[OK] Model loaded successfully")
-        else:
-            print(f"[WARNING] Model not found at {MODEL_PATH}")
-            print("Please run train_model.py first to train the model")
-            
         if os.path.exists(CLASSES_PATH):
             with open(CLASSES_PATH, 'r') as f:
                 class_mapping = json.load(f)
             print(f"[OK] Classes loaded: {list(class_mapping.values())}")
         else:
             print(f"[WARNING] Classes file not found at {CLASSES_PATH}")
-            
+    except Exception as e:
+        print(f"[ERROR] Error loading classes: {str(e)}")
+    
+    # Model will be loaded on first request (lazy loading)
+    print("[INFO] Model will be loaded on first request (lazy loading)")
+
+def ensure_model_loaded():
+    """Load model on first request if not already loaded"""
+    global model
+    
+    if model is not None:
+        return True
+    
+    try:
+        if os.path.exists(MODEL_PATH):
+            print(f"[INFO] Loading model from {MODEL_PATH}...")
+            model = tf.keras.models.load_model(MODEL_PATH)
+            print("[OK] Model loaded successfully")
+            return True
+        else:
+            print(f"[ERROR] Model not found at {MODEL_PATH}")
+            return False
     except Exception as e:
         print(f"[ERROR] Error loading model: {str(e)}")
+        return False
 
 def preprocess_image(image_data):
     """Preprocess image for model prediction"""
@@ -144,10 +159,18 @@ def detect_disease():
         print("[INFO] New detection request received")
         print("="*60)
         
-        if model is None or class_mapping is None:
-            print("[ERROR] Model or classes not loaded")
+        # Ensure model is loaded (lazy loading on first request)
+        if not ensure_model_loaded():
+            print("[ERROR] Failed to load model")
             return jsonify({
                 'error': 'Model not loaded. Please train the model first.',
+                'isLeaf': False
+            }), 503
+        
+        if class_mapping is None:
+            print("[ERROR] Classes not loaded")
+            return jsonify({
+                'error': 'Classes not loaded',
                 'isLeaf': False
             }), 503
         
