@@ -9,6 +9,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers, models
+from tensorflow.keras import mixed_precision
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from sklearn.metrics import classification_report, confusion_matrix
 import matplotlib.pyplot as plt
@@ -18,15 +19,37 @@ from pathlib import Path
 DATASET_PATH = r"d:\leafdetection\image data"
 MODEL_SAVE_PATH = r"d:\leafdetection\smart-leaf-advisor-main\public\leaf_disease_model.h5"
 CLASSES_SAVE_PATH = r"d:\leafdetection\smart-leaf-advisor-main\public\classes.json"
-IMG_SIZE = 224
-BATCH_SIZE = 32
-EPOCHS = 15
+
+# Fast mode lets you trade a little accuracy for noticeably faster experiments.
+FAST_MODE = os.getenv("FAST_TRAINING", "false").lower() == "true"
+
+DEFAULT_IMG_SIZE = 224
+DEFAULT_BATCH_SIZE = 32
+DEFAULT_EPOCHS = 15
+
+FAST_IMG_SIZE = 176
+FAST_BATCH_SIZE = 32  # keep batch size moderate for CPU/GPU compatibility
+FAST_EPOCHS = 10
+
+IMG_SIZE = FAST_IMG_SIZE if FAST_MODE else DEFAULT_IMG_SIZE
+BATCH_SIZE = FAST_BATCH_SIZE if FAST_MODE else DEFAULT_BATCH_SIZE
+EPOCHS = FAST_EPOCHS if FAST_MODE else DEFAULT_EPOCHS
 VALIDATION_SPLIT = 0.2
 
 def get_class_names():
     """Extract class names from directory structure"""
     train_path = os.path.join(DATASET_PATH, "train")
-    classes = sorted([d for d in os.listdir(train_path) if os.path.isdir(os.path.join(train_path, d))])
+    all_classes = sorted([d for d in os.listdir(train_path) if os.path.isdir(os.path.join(train_path, d))])
+    
+    # Filter to only 6 crops (case-insensitive matching)
+    selected_crops = ['apple', 'corn', 'grape', 'potato', 'rice', 'tomato']
+    classes = [c for c in all_classes if any(crop.lower() in c.lower() for crop in selected_crops)]
+    
+    print(f"[INFO] Selected crops: {selected_crops}")
+    print(f"[INFO] All available classes: {all_classes}")
+    print(f"[INFO] Filtered classes: {classes}")
+    print(f"[INFO] Total classes for selected crops: {len(classes)}")
+    
     return classes
 
 def create_model(num_classes):
@@ -82,14 +105,36 @@ def create_model(num_classes):
         layers.Dense(256, activation='relu'),
         layers.BatchNormalization(),
         layers.Dropout(0.5),
-        layers.Dense(num_classes, activation='softmax')
+        layers.Dense(num_classes, activation='softmax', dtype='float32')
     ])
     
     return model
 
+
+def configure_performance():
+    """Enable optional TensorFlow performance features."""
+    gpu_devices = tf.config.list_physical_devices('GPU')
+    if gpu_devices:
+        try:
+            for gpu in gpu_devices:
+                tf.config.experimental.set_memory_growth(gpu, True)
+            mixed_precision.set_global_policy('mixed_float16')
+            print("[INFO] GPU detected – mixed precision enabled for faster training")
+        except Exception as exc:
+            print(f"[WARNING] Could not enable mixed precision: {exc}")
+    else:
+        print("[WARNING] No GPU detected – training will run on CPU")
+    try:
+        tf.config.optimizer.set_jit(True)
+        print("[INFO] XLA JIT compilation enabled")
+    except Exception as exc:
+        print(f"[WARNING] Could not enable XLA JIT: {exc}")
+
 def train_model():
     """Train the leaf disease detection model"""
     print("[INFO] Starting Leaf Disease Detection Model Training...")
+    configure_performance()
+    print(f"[INFO] Training configuration -> FAST_MODE={FAST_MODE}, IMG_SIZE={IMG_SIZE}, BATCH_SIZE={BATCH_SIZE}, EPOCHS={EPOCHS}")
     
     # Get class names
     classes = get_class_names()
@@ -131,7 +176,9 @@ def train_model():
         target_size=(IMG_SIZE, IMG_SIZE),
         batch_size=BATCH_SIZE,
         class_mode='categorical',
-        classes=classes
+        classes=classes,
+        shuffle=True,
+        seed=42
     )
     
     val_generator = val_datagen.flow_from_directory(
@@ -139,7 +186,8 @@ def train_model():
         target_size=(IMG_SIZE, IMG_SIZE),
         batch_size=BATCH_SIZE,
         class_mode='categorical',
-        classes=classes
+        classes=classes,
+        shuffle=False
     )
     
     # Callbacks

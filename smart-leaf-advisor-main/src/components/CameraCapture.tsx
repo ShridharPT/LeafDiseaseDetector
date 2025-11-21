@@ -77,9 +77,15 @@ export const CameraCapture = ({ onImageCapture }: CameraCaptureProps) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const result = e.target?.result as string;
+      console.log('[DEBUG] File read complete. Base64 length:', result?.length || 0);
+      console.log('[DEBUG] Base64 preview:', result?.substring(0, 50) || 'EMPTY');
       setPreview(result);
       onImageCapture(result);
       toast.success(t('Image uploaded successfully!', 'ಚಿತ್ರವನ್ನು ಯಶಸ್ವಿಯಾಗಿ ಅಪ್‌ಲೋಡ್ ಮಾಡಲಾಗಿದೆ!'));
+    };
+    reader.onerror = () => {
+      console.error('[ERROR] FileReader failed');
+      toast.error(t('Failed to read file', 'ಫೈಲ್ ಓದಲು ವಿಫಲವಾಗಿದೆ'));
     };
     reader.readAsDataURL(file);
   };
