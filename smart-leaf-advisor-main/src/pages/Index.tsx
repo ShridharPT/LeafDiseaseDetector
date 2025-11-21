@@ -71,7 +71,7 @@ const Index = () => {
 
     try {
       // Call local Flask API for ML detection
-      const response = await fetch('http://localhost:5000/detect', {
+      const response = await fetch('https://leafdiseasedetector-x8fy.onrender.com/detect', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
